@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script type="text/javascript" src="three.js"></script>
+		<script type="text/javascript" src="stats.min.js"></script>
+		<script type="text/javascript" src="OrbitControls.js"></script>
+		
+		<title>wtf</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+	</head>
+	<body style="padding:0;margin:0;overflow:hidden;">
+		<canvas style="padding:0;margin:0;"></canvas>
+		<script>
+
+var camera, scene, renderer, controls, stats;
+var occluderGroup = new THREE.Group();
+
+var baseSize = 10;
+var tiles = 12;
+
+var distance = baseSize*4;
+var occluderSize = distance*2;
+
+init();
+animate();
+
+function init() {
+
+	renderer = new THREE.WebGLRenderer( { 
+		canvas: document.querySelector( 'canvas' ),
+		antialias: true, 
+	});
+
+	renderer.setPixelRatio( window.devicePixelRatio/3 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+
+	stats = new Stats();
+	document.body.appendChild( stats.dom );
+
+	camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, distance + occluderSize);
+	camera.up.set(0, 0, 1);
+	camera.position.x=0;
+	camera.position.y=0;
+	camera.position.z=distance;
+
+	controls = new THREE.OrbitControls( camera, renderer.domElement );
+	controls.keyPanSpeed=50.0;
+	//controls.target.z = 10;
+
+	// Our scene
+	scene = new THREE.Scene();
+	scene.fog = new THREE.Fog(new THREE.Color(0,0,0), occluderSize, occluderSize);
+	
+	setupScene();
+	
+	onWindowResize();
+	window.addEventListener( 'resize', onWindowResize, false );
+
+}
+
+function setupScene() {
+    var i, j, scale;
+
+	for (j = -tiles; j < tiles; j++) {
+	    for (i = -tiles; i < tiles; i++) {
+	    	var geometry;
+	    	var type = Math.floor(Math.random()*3);
+			if (type < 2) {
+				geometry = new THREE.BoxGeometry(1,1,1); scale = 0.7;
+			}	
+			else if (type == 2) {
+				geometry = new THREE.SphereGeometry(1, 12, 12); scale = 0.5;
+			}
+			/*
+			else if (type == 2) {
+				geometry = new THREE.TorusGeometry(0.5, 0.15, 12, 12); scale = 0.7;
+			}
+			else if (type == 3) {
+				geometry = new THREE.ConeGeometry(1, 2, 12); scale = 0.4;
+			}
+			else if (type == 4) {
+				geometry = new THREE.TorusKnotGeometry(0.5, 0.15, 32, 12); scale = 0.5;
+			}*/
+			
+			var material = new THREE.MeshPhongMaterial();
+			//material.color = new THREE.Color(Math.random(), Math.random(), Math.random());
+			material.color = new THREE.Color(0.8,0.8,0.8);
+			material.transparent = true;
+			var thingy = new THREE.Mesh( geometry, material );
+			thingy.position.x = i * baseSize + baseSize * 0.5;
+			thingy.position.y = j * baseSize + baseSize * 0.5;
+			thingy.position.z = -baseSize/2;
+			
+
+			var randomScale = 0.7;
+			thingy.scale.x= baseSize*(scale + scale*randomScale)/2;
+			thingy.scale.y= baseSize*(scale + scale*randomScale)/2;
+			thingy.scale.z= 0.01; //baseSize*(scale + scale*randomScale)/2;
+
+			//thingy.rotateX(Math.random()*Math.PI*2);
+			//thingy.rotateY(Math.random()*Math.PI*2);
+			//thingy.rotateZ(Math.random()*Math.PI*2);
+
+			scene.add( thingy );
+		}
+	}
+
+	var pointsGeometry = new THREE.Geometry();
+
+	for (i=0; i< 3*tiles*tiles; i++) {
+		pointsGeometry.vertices.push(new THREE.Vector3(
+			2*(Math.random()-0.5)*baseSize*tiles,
+			2*(Math.random()-0.5)*baseSize*tiles,
+			Math.random()*baseSize
+		));
+	}
+
+	var pointsMaterial = new THREE.PointsMaterial( { color: 0xFFFF00, transparent:true } );
+	var points = new THREE.Points(pointsGeometry, pointsMaterial);
+	//scene.add(points);
+
+	var occluderGeometry = new THREE.SphereGeometry(occluderSize/2, 12, 12);
+	//var occluderGeometry = new THREE.BoxGeometry(occluderSize,occluderSize,occluderSize);
+
+	//var hardOccluderMaterial = new THREE.MeshBasicMaterial( {colorWrite: false, side:THREE.BackSide, transparent: false} );
+	var hardOccluderMaterial = new THREE.MeshBasicMaterial( {color: 0x0000ff, side:THREE.BackSide, transparent: true, opacity: 0.5} );
+
+
+	var softOccluderMaterial = new THREE.MeshBasicMaterial( {color: 0xffffff, side:THREE.BackSide, transparent: true, opacity: 0.85} );
+
+	var hardOccluder = new THREE.Mesh( occluderGeometry, hardOccluderMaterial );
+	hardOccluder.scale.set(1, 1, 1);
+	occluderGroup.add(hardOccluder);
+
+	var softOccluder, softOccluderDistanceFactor;
+	var count = 1;
+	var size = 0.9;
+
+	for (i=1; i<=count; i++) {
+		softOccluderDistanceFactor = 1 - ((size/count)*i);
+		softOccluder = new THREE.Mesh( occluderGeometry, softOccluderMaterial );
+		softOccluder.scale.set(softOccluderDistanceFactor, softOccluderDistanceFactor, softOccluderDistanceFactor);
+		//occluderGroup.add(softOccluder);
+	}
+
+	scene.add(occluderGroup);
+
+	var light = new THREE.DirectionalLight( 0xFFFFFF );
+	light.position.z=10;
+	scene.add(light);
+	light = new THREE.AmbientLight( 0x404040 ); // soft white light
+	scene.add( light );
+	scene.background = new THREE.Color( 0x000000);
+}
+
+function onWindowResize() {
+
+	var aspect = window.innerWidth / window.innerHeight;
+	camera.aspect = aspect;
+	camera.updateProjectionMatrix();
+
+	renderer.setSize( window.innerWidth, window.innerHeight );
+}
+
+var facets = 6;
+
+function animate() {
+	camera.updateProjectionMatrix();
+	//controls.target.y+=0.05;
+	//camera.position.y+=0.05;
+
+	//controls.target.z+=0.05;
+	//camera.position.z+=0.05;
+
+	occluderGroup.position.x = controls.target.x;
+	occluderGroup.position.y = controls.target.y;
+	occluderGroup.position.z = controls.target.z;
+	requestAnimationFrame( animate );
+
+	renderer.render( scene, camera );
+	
+	controls.update();
+	stats.update();
+}
+
+		</script>
+	</body>
+</html>
